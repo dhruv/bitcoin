@@ -29,11 +29,12 @@ from test_framework.util import (
     wait_until,
 )
 
+
 # P2PInterface is a class containing callbacks to be executed when a P2P
 # message is received from the node-under-test. Subclass P2PInterface and
 # override the on_*() methods if you need custom behaviour.
 class BaseNode(P2PInterface):
-    def __init__(self):
+    def __init__(self, node, log=None):
         """Initialize the P2PInterface
 
         Used to initialize custom properties for the Node that aren't
@@ -47,13 +48,24 @@ class BaseNode(P2PInterface):
         super().__init__()
         # Stores a dictionary of all blocks received
         self.block_receive_map = defaultdict(int)
+        self.node = node
+        if log:
+            self.log = log
 
     def on_block(self, message):
         """Override the standard on_block callback
 
         Store the hash of a received block in the dictionary."""
         message.block.calc_sha256()
+        self.last_block_received = message.block.sha256
         self.block_receive_map[message.block.sha256] += 1
+        if self.log:
+            self.log.info("Node %d received block %s. New block height: %d" % (
+                self.node,
+                self.last_block_received,
+                sum(self.block_receive_map.values())
+            ))
+        
 
     def on_inv(self, message):
         """Override the standard on_inv callback"""
@@ -137,7 +149,7 @@ class ExampleTest(BitcoinTestFramework):
         """Main test logic"""
 
         # Create P2P connections will wait for a verack to make sure the connection is fully up
-        self.nodes[0].add_p2p_connection(BaseNode())
+        self.nodes[0].add_p2p_connection(BaseNode(0, self.log))
 
         # Generating a block on one of the nodes will get us out of IBD
         blocks = [int(self.nodes[0].generate(nblocks=1)[0], 16)]
@@ -190,9 +202,10 @@ class ExampleTest(BitcoinTestFramework):
         self.sync_all()
 
         self.log.info("Add P2P connection to node2")
+        # QUESTION: There was no need to disconnect this p2p connection -- curious it's here.
         self.nodes[0].disconnect_p2ps()
 
-        self.nodes[2].add_p2p_connection(BaseNode())
+        self.nodes[2].add_p2p_connection(BaseNode(2, self.log))
 
         self.log.info("Test that node2 propagates all the blocks to us")
 
@@ -204,6 +217,44 @@ class ExampleTest(BitcoinTestFramework):
         # wait_until() will loop until a predicate condition is met. Use it to test properties of the
         # P2PInterface objects.
         wait_until(lambda: sorted(blocks) == sorted(list(self.nodes[2].p2p.block_receive_map.keys())), timeout=5, lock=mininode_lock)
+
+        # Generate a new block on node 1 and trasmit it to nodes 0 and 2
+        # Note that we've removed the p2p chat protocol abstraction between 0 and 1 but 
+        # the underlying connection between the bitcoind instances exists.
+        # Network topology is: 0 <--> 1 <--> 2
+        prior_to_mining_height = self.nodes[1].getblockcount()
+        prior_tip = self.nodes[1].getbestblockhash()
+        
+        # Create a new block using (1) test_node.generate() or blocktools.create_block      
+        new_tip = self.nodes[1].generate(nblocks=1)[0]
+        # block = create_block(int(prior_tip, 16),
+        #                      create_coinbase(prior_to_mining_height+1),
+        #                      self.nodes[1].getblock(self.nodes[0].getbestblockhash())['time'] + 1)
+        # block.solve()
+        # block_message = msg_block(block)
+        # # Send message is used to send a P2P message to the node over our P2PInterface
+        # self.nodes[1].add_p2p_connection(BaseNode(1, self.log))
+        # self.nodes[1].p2p.send_message(block_message)
+        # new_tip = block.hash
+        
+        # assert_equal(new_tip, self.nodes[1].getbestblockhash()[0])
+        wait_until(lambda: self.nodes[1].getbestblockhash() == self.nodes[2].getbestblockhash(), timeout=5, lock=mininode_lock)
+        # A new block was mined
+        assert_equal(self.nodes[1].getblockcount(), prior_to_mining_height + 1)
+
+        # The other nodes have received the new block
+        self.log.info("New node 2 tip: %s" % self.nodes[2].getbestblockhash())
+
+        # QUESTION: For some reason - this following assertion fails.
+        # It turns out that [1].generate, followed by a full sync updates the block count,
+        # and the tip, but p2p.on_block is not invoked on [2] with the new block.
+        # This is consistent whether the new block is generated using test_node.generate()
+        # or blocktools.create_block()
+        assert_equal(self.nodes[2].p2p.last_block_received, new_tip)
+        assert_equal(self.nodes[1].getblockcount(), self.nodes[2].getblockcount(), self.nodes[0].getblockcount())
+        
+        # And the tips of the new blocks are the new block
+        assert_equal(new_tip, self.nodes[2].getbestblockhash(), self.nodes[0].getbestblockhash())
 
         self.log.info("Check that each block was received only once")
         # The network thread uses a global lock on data access to the P2PConnection objects when sending and receiving
