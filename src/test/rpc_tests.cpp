@@ -237,6 +237,23 @@ BOOST_AUTO_TEST_CASE(json_parse_errors)
     BOOST_CHECK_THROW(ParseNonRFCJSONValue("3J98t1WpEZ73CNmQviecrnyiWrnqRhWNL"), std::runtime_error);
 }
 
+// RPC: setban behavior seems inconsistent today.
+// This test case bans 127.0.0.0/24 and demonstrates that subsequently
+// trying to ban 127.0.0.0 and 127.0.0.0/32 results in different responses.
+// 
+// Root cause: 
+// BanMan::IsBanned(const CNetAddr&) checks address membership in previously banned subnets
+// BanMan::IsBanned(const CSubNet&) checks exact matches (as opposed to subsets) to
+// previously banned subnets
+BOOST_AUTO_TEST_CASE(rpc_ban_inconsistent)
+{
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("clearbanned")));
+    UniValue r;
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 127.0.0.0/24 add")));
+    BOOST_CHECK_THROW(r = CallRPC(std::string("setban 127.0.0.0 add")), std::runtime_error);
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 127.0.0.0/32 add")));
+}
+
 BOOST_AUTO_TEST_CASE(rpc_ban)
 {
     BOOST_CHECK_NO_THROW(CallRPC(std::string("clearbanned")));
