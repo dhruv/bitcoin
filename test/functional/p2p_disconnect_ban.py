@@ -34,46 +34,57 @@ class DisconnectBanTest(BitcoinTestFramework):
         self.log.info("clearbanned: successfully clear ban list")
         self.nodes[1].clearbanned()
         assert_equal(len(self.nodes[1].listbanned()), 0)
-        self.nodes[1].setban("127.0.0.0/24", "add")
+        self.nodes[1].setban(subnet="127.0.0.0/24", command="add", bantime=200)
 
-        self.log.info("setban: fail to ban an already banned subnet")
+        self.log.info("setban: banning a subset of a previous ban for a shorter period does nothing")
         assert_equal(len(self.nodes[1].listbanned()), 1)
-        assert_raises_rpc_error(-23, "IP/Subnet already banned", self.nodes[1].setban, "127.0.0.1", "add")
+        self.nodes[1].setban(subnet="127.0.0.1", command="add", bantime=100)
+        assert_equal(len(self.nodes[1].listbanned()), 1)
+
+        self.log.info("setban: banning a subset of a previous ban for a longer period adds a ban")
+        self.nodes[1].setban(subnet="127.0.0.0/28", command="add", bantime=300)
+        assert_equal(len(self.nodes[1].listbanned()), 2)
 
         self.log.info("setban: fail to ban an invalid subnet")
         assert_raises_rpc_error(-30, "Error: Invalid IP/Subnet", self.nodes[1].setban, "127.0.0.1/42", "add")
-        assert_equal(len(self.nodes[1].listbanned()), 1)  # still only one banned ip because 127.0.0.1 is within the range of 127.0.0.0/24
+        assert_equal(len(self.nodes[1].listbanned()), 2)
+
+        self.log.info("setban: banning a superset of a previous ban for a shorter period adds an entry")
+        self.nodes[1].setban(subnet="127.0.0.0/23", command="add", bantime=50)
+        assert_equal(len(self.nodes[1].listbanned()), 3)
+
+        self.log.info("setban: banning a superset of a previous ban for a longer period overrides other entries")
+        self.nodes[1].setban(subnet="127.0.0.0/22", command="add", bantime=301)
+        assert_equal(len(self.nodes[1].listbanned()), 1)
 
         self.log.info("setban remove: fail to unban a non-banned subnet")
         assert_raises_rpc_error(-30, "Error: Unban failed", self.nodes[1].setban, "127.0.0.1", "remove")
         assert_equal(len(self.nodes[1].listbanned()), 1)
 
         self.log.info("setban remove: successfully unban subnet")
-        self.nodes[1].setban("127.0.0.0/24", "remove")
+        self.nodes[1].setban("127.0.0.0/22", "remove")
         assert_equal(len(self.nodes[1].listbanned()), 0)
         self.nodes[1].clearbanned()
         assert_equal(len(self.nodes[1].listbanned()), 0)
 
         self.log.info("setban: test persistence across node restart")
         self.nodes[1].setban("127.0.0.0/32", "add")
-        self.nodes[1].setban("127.0.0.0/24", "add")
         # Set the mocktime so we can control when bans expire
         old_time = int(time.time())
         self.nodes[1].setmocktime(old_time)
         self.nodes[1].setban("192.168.0.1", "add", 1)  # ban for 1 seconds
         self.nodes[1].setban("2001:4d48:ac57:400:cacf:e9ff:fe1d:9c63/19", "add", 1000)  # ban for 1000 seconds
         listBeforeShutdown = self.nodes[1].listbanned()
-        assert_equal("192.168.0.1/32", listBeforeShutdown[2]['address'])
+        assert_equal("192.168.0.1/32", listBeforeShutdown[1]['address'])
         # Move time forward by 3 seconds so the third ban has expired
         self.nodes[1].setmocktime(old_time + 3)
-        assert_equal(len(self.nodes[1].listbanned()), 3)
+        assert_equal(len(self.nodes[1].listbanned()), 2)
 
         self.restart_node(1)
 
         listAfterShutdown = self.nodes[1].listbanned()
-        assert_equal("127.0.0.0/24", listAfterShutdown[0]['address'])
-        assert_equal("127.0.0.0/32", listAfterShutdown[1]['address'])
-        assert_equal("/19" in listAfterShutdown[2]['address'], True)
+        assert_equal("127.0.0.0/32", listAfterShutdown[0]['address'])
+        assert_equal("/19" in listAfterShutdown[1]['address'], True)
 
         # Clear ban lists
         self.nodes[1].clearbanned()

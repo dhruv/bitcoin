@@ -845,7 +845,7 @@ CSubNet::CSubNet(const CNetAddr& addr, const CNetAddr& mask) : CSubNet()
 
 CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
 {
-    valid = addr.IsIPv4() || addr.IsIPv6();
+    valid = (addr.IsIPv4() || addr.IsIPv6()) && addr.IsValid();
     if (!valid) {
         return;
     }
@@ -872,6 +872,37 @@ bool CSubNet::Match(const CNetAddr &addr) const
         }
     }
     return true;
+}
+
+/**
+ * @returns True if this subnet is a superset of otherSubnet
+ */
+bool CSubNet::IsSuperset(const CSubNet& otherSubnet) const
+{
+    return MinAddress() <= otherSubnet.MinAddress() && MaxAddress() >= otherSubnet.MaxAddress();
+}
+
+const CNetAddr CSubNet::MinAddress() const
+{
+    assert(network.m_addr.size() <= sizeof(netmask));
+
+    CNetAddr min_addr{network};
+    for (size_t i = 0; i < network.m_addr.size(); ++i) {
+        min_addr.m_addr[i] = (uint8_t)(min_addr.m_addr[i] & netmask[i]);
+    }
+    return min_addr;
+}
+
+const CNetAddr CSubNet::MaxAddress() const
+{
+    assert(network.m_addr.size() <= sizeof(netmask));
+
+    CNetAddr max_addr{network};
+    for (size_t i = 0; i < network.m_addr.size(); ++i) {
+        max_addr.m_addr[i] = (uint8_t)(max_addr.m_addr[i] & netmask[i]);
+        max_addr.m_addr[i] = (uint8_t)(max_addr.m_addr[i] | ~netmask[i]);
+    }
+    return max_addr;
 }
 
 std::string CSubNet::ToString() const

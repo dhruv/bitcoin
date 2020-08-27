@@ -170,6 +170,9 @@ class CNetAddr
         friend bool operator==(const CNetAddr& a, const CNetAddr& b);
         friend bool operator!=(const CNetAddr& a, const CNetAddr& b) { return !(a == b); }
         friend bool operator<(const CNetAddr& a, const CNetAddr& b);
+        friend bool operator>=(const CNetAddr& a, const CNetAddr& b) { return !(a < b); }
+        friend bool operator>(const CNetAddr& a, const CNetAddr& b) { return (a >= b) && (a != b); }
+        friend bool operator<=(const CNetAddr& a, const CNetAddr& b) { return !(a > b); }
 
         /**
          * Serialize to a stream.
@@ -294,6 +297,9 @@ class CSubNet
 
         bool Match(const CNetAddr &addr) const;
 
+        // Returns whether this subnet is a superset of otherSubnet
+        bool IsSuperset(const CSubNet& otherSubnet) const;
+
         std::string ToString() const;
         bool IsValid() const;
 
@@ -302,6 +308,10 @@ class CSubNet
         friend bool operator<(const CSubNet& a, const CSubNet& b);
 
         SERIALIZE_METHODS(CSubNet, obj) { READWRITE(obj.network, obj.netmask, obj.valid); }
+
+    private:
+        const CNetAddr MinAddress() const;
+        const CNetAddr MaxAddress() const;
 };
 
 /** A combination of a network address (CNetAddr) and a (TCP) port */

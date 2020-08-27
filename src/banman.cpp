@@ -5,6 +5,8 @@
 
 #include <banman.h>
 
+#include <vector>
+
 #include <netaddress.h>
 #include <node/ui_interface.h>
 #include <util/system.h>
@@ -89,24 +91,22 @@ bool BanMan::IsBanned(const CNetAddr& net_addr)
     return false;
 }
 
-bool BanMan::IsBanned(const CSubNet& sub_net)
+bool BanMan::HasBannedAddresses(const CSubNet& sub_net)
 {
     auto current_time = GetTime();
     LOCK(m_cs_banned);
-    banmap_t::iterator i = m_banned.find(sub_net);
-    if (i != m_banned.end()) {
-        CBanEntry ban_entry = (*i).second;
-        if (current_time < ban_entry.nBanUntil) {
+
+    for (const auto& it : m_banned) {
+        CSubNet banned_sub_net = it.first;
+        CBanEntry ban_entry = it.second;
+        // Return true if any banned subnet is a superset or subset of the new
+        // subnet
+        if ((banned_sub_net.IsSuperset(sub_net) || sub_net.IsSuperset(banned_sub_net)) &&
+            current_time < ban_entry.nBanUntil) {
             return true;
         }
     }
     return false;
-}
-
-void BanMan::Ban(const CNetAddr& net_addr, int64_t ban_time_offset, bool since_unix_epoch)
-{
-    CSubNet sub_net(net_addr);
-    Ban(sub_net, ban_time_offset, since_unix_epoch);
 }
 
 void BanMan::Discourage(const CNetAddr& net_addr)
@@ -115,9 +115,9 @@ void BanMan::Discourage(const CNetAddr& net_addr)
     m_discouraged.insert(net_addr.GetAddrBytes());
 }
 
-void BanMan::Ban(const CSubNet& sub_net, int64_t ban_time_offset, bool since_unix_epoch)
+bool BanMan::Ban(const CSubNet& sub_net, int64_t ban_time_offset, bool since_unix_epoch)
 {
-    CBanEntry ban_entry(GetTime());
+    CBanEntry new_ban_entry(GetTime());
 
     int64_t normalized_ban_time_offset = ban_time_offset;
     bool normalized_since_unix_epoch = since_unix_epoch;
@@ -125,20 +125,36 @@ void BanMan::Ban(const CSubNet& sub_net, int64_t ban_time_offset, bool since_uni
         normalized_ban_time_offset = m_default_ban_time;
         normalized_since_unix_epoch = false;
     }
-    ban_entry.nBanUntil = (normalized_since_unix_epoch ? 0 : GetTime()) + normalized_ban_time_offset;
+    new_ban_entry.nBanUntil = (normalized_since_unix_epoch ? 0 : GetTime()) + normalized_ban_time_offset;
 
     {
         LOCK(m_cs_banned);
-        if (m_banned[sub_net].nBanUntil < ban_entry.nBanUntil) {
-            m_banned[sub_net] = ban_entry;
-            m_is_dirty = true;
-        } else
-            return;
+        std::vector<CSubNet> entries_to_delete;
+        for (const auto& it : m_banned) {
+            CSubNet banned_sub_net = it.first;
+            CBanEntry ban_entry = it.second;
+
+            if (sub_net.IsSuperset(banned_sub_net) && new_ban_entry.nBanUntil > ban_entry.nBanUntil) {
+                // adding a less specific ban entry, for longer: consolidate entries
+                entries_to_delete.push_back(banned_sub_net);
+            } else if (banned_sub_net.IsSuperset(sub_net) && new_ban_entry.nBanUntil <= ban_entry.nBanUntil) {
+                // adding a more specific ban entry for a shorter duration: nothing to do
+                return false;
+            }
+        }
+
+        for (const auto& it : entries_to_delete) {
+            m_banned.erase(it);
+        }
+
+        m_banned[sub_net] = new_ban_entry;
+        m_is_dirty = true;
     }
     if (m_client_interface) m_client_interface->BannedListChanged();
 
     //store banlist to disk immediately
     DumpBanlist();
+    return true;
 }
 
 bool BanMan::Unban(const CNetAddr& net_addr)

@@ -276,16 +276,54 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK(banned_until.get_int64() > now);
     BOOST_CHECK(banned_until.get_int64()-now <= 200);
 
-    // must throw an exception because 127.0.0.1 is in already banned subnet range
-    BOOST_CHECK_THROW(r = CallRPC(std::string("setban 127.0.0.1 add")), std::runtime_error);
-
-    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.0/24 remove")));
+    // add a more specific ban for a longer duration. now there should be 2 bans.
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.0/25 add 2000")));
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
     ar = r.get_array();
-    BOOST_CHECK_EQUAL(ar.size(), 0U);
+    BOOST_CHECK_EQUAL(ar.size(), 2U);
+    o1 = ar[1].get_obj();
+    adr = find_value(o1, "address");
+    BOOST_CHECK_EQUAL(adr.get_str(), "127.0.0.0/25");
+
+    // add a more specific ban for a shorter duration. no new bans should be added.
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.0/25 add 250")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 2U);
+
+    // add a less specific ban for a shorter period. now there should be 3 bans.
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.0/23 add 100")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 3U);
+
+    // add a less specific ban for a longer period. this should override all other bans.
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.0/22 add 2001")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    BOOST_TEST_MESSAGE(r.write());
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 1U);
+
+    // ban 127.0.0.1 (no mask) for a longer duration should add a ban entry.
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.1 add 3000")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    BOOST_TEST_MESSAGE(r.write());
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 2U);
+    o1 = ar[1].get_obj();
+    adr = find_value(o1, "address");
+    BOOST_CHECK_EQUAL(adr.get_str(), "127.0.0.1/32");
+
+    // cannot unban except for exact matches
+    BOOST_CHECK_THROW(CallRPC(std::string("setban 127.0.0.0/24 remove")), std::runtime_error);
+
+    // can unban exact matches
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.0/22 remove")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 1U);
 
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 127.0.0.0/255.255.0.0 add")));
-    BOOST_CHECK_THROW(r = CallRPC(std::string("setban 127.0.1.1 add")), std::runtime_error);
 
     BOOST_CHECK_NO_THROW(CallRPC(std::string("clearbanned")));
     BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
