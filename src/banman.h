@@ -71,7 +71,6 @@ public:
     //! Return whether net_addr is discouraged.
     bool IsDiscouraged(const CNetAddr& net_addr);
 
-    bool Unban(const CNetAddr& net_addr);
     bool Unban(const CSubNet& sub_net);
     void GetBanned(banmap_t& banmap);
     void DumpBanlist();

@@ -51,10 +51,6 @@ void test_one_input(const std::vector<uint8_t>& buffer)
                 ban_man.HasBannedAddresses(ConsumeSubNet(fuzzed_data_provider));
                 break;
             }
-            case 6: {
-                ban_man.Unban(ConsumeNetAddr(fuzzed_data_provider));
-                break;
-            }
             case 7: {
                 ban_man.Unban(ConsumeSubNet(fuzzed_data_provider));
                 break;
