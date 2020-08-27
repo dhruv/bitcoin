@@ -47,10 +47,6 @@ void test_one_input(const std::vector<uint8_t>& buffer)
                 ban_man.ClearBanned();
                 break;
             }
-            case 4: {
-                ban_man.IsBanned(ConsumeNetAddr(fuzzed_data_provider));
-                break;
-            }
             case 5: {
                 ban_man.HasBannedAddresses(ConsumeSubNet(fuzzed_data_provider));
                 break;

@@ -65,9 +65,6 @@ public:
     void Discourage(const CNetAddr& net_addr);
     void ClearBanned();
 
-    //! Return whether net_addr is banned
-    bool IsBanned(const CNetAddr& net_addr);
-
     //! Return true if subnet includes previously banned addresses
     bool HasBannedAddresses(const CSubNet& sub_net);
 

@@ -2582,7 +2582,7 @@ void PeerLogicValidation::ProcessMessage(CNode& pfrom, const std::string& msg_ty
             if (addr.nTime <= 100000000 || addr.nTime > nNow + 10 * 60)
                 addr.nTime = nNow - 5 * 24 * 60 * 60;
             pfrom.AddAddressKnown(addr);
-            if (m_banman && (m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr))) {
+            if (m_banman && (m_banman->IsDiscouraged(addr) || m_banman->HasBannedAddresses(CSubNet(addr)))) {
                 // Do not process banned/discouraged addresses beyond remembering we received them
                 continue;
             }
