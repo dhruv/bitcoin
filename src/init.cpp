@@ -1996,6 +1996,13 @@ bool AppInitMain(const util::Ref& context, NodeContext& node, interfaces::BlockA
         if (connect.size() != 1 || connect[0] != "0") {
             connOptions.m_specified_outgoing = connect;
         }
+        if (!connOptions.m_specified_outgoing.empty() && !connOptions.vSeedNodes.empty()) {
+            LogPrintf("-seednode is ignored when -connect is used\n");
+        }
+
+        if (args.IsArgSet("-dnsseed") && args.GetBoolArg("-dnsseed", DEFAULT_DNSSEED) && args.IsArgSet("-proxy")) {
+            LogPrintf("-dnsseed is ignored when -connect is used and -proxy is specified\n");
+        }
     }
 
     const std::string& i2psam_arg = args.GetArg("-i2psam", "");
