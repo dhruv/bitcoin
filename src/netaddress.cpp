@@ -1068,7 +1068,7 @@ CSubNet::CSubNet(const CNetAddr& addr, const CNetAddr& mask) : CSubNet()
 
 CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
 {
-    valid = addr.IsIPv4() || addr.IsIPv6();
+    valid = (addr.IsIPv4() || addr.IsIPv6()) && addr.IsValid();
     if (!valid) {
         return;
     }
