@@ -364,6 +364,40 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     o1 = ar[0].get_obj();
     adr = find_value(o1, "address");
     BOOST_CHECK_EQUAL(adr.get_str(), "2001:4d48:ac57:400:cacf:e9ff:fe1d:9c63/128");
+
+    //removeall ipv4 test
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("clearbanned")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 127.0.0.0/16 add")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 127.0.0.0/24 add")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 127.0.0.0/32 add")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 3U);
+    BOOST_CHECK_THROW(CallRPC(std::string("setban 127.0.0.3/32 removeall")), std::runtime_error); // cannot removeall subnets
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 127.0.0.3 removeall"))); // remove all subnets with 127.0.0.3
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 1U);
+    o1 = ar[0].get_obj();
+    adr = find_value(o1, "address");
+    BOOST_CHECK_EQUAL(adr.get_str(), "127.0.0.0/32");
+
+    //removeall ipv6 test
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("clearbanned")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 2001:4d48:ac57:400:cacf:e9ff:fe1d:9c63/96 add")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 2001:4d48:ac57:400:cacf:e9ff:fe1d:9c63/112 add")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("setban 2001:4d48:ac57:400:cacf:e9ff:fe1d:9c63/128 add")));
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 3U);
+    BOOST_CHECK_THROW(CallRPC(std::string("setban 2001:4d48:ac57:400:cacf:e9ff:fe1d:9c64/128 removeall")), std::runtime_error); // cannot removeall subnets
+    BOOST_CHECK_NO_THROW(CallRPC(std::string("setban 2001:4d48:ac57:400:cacf:e9ff:fe1d:9c64 removeall"))); // remove all subnets with 127.0.0.3
+    BOOST_CHECK_NO_THROW(r = CallRPC(std::string("listbanned")));
+    ar = r.get_array();
+    BOOST_CHECK_EQUAL(ar.size(), 1U);
+    o1 = ar[0].get_obj();
+    adr = find_value(o1, "address");
+    BOOST_CHECK_EQUAL(adr.get_str(), "2001:4d48:ac57:400:cacf:e9ff:fe1d:9c63/128");
 }
 
 BOOST_AUTO_TEST_CASE(rpc_convert_values_generatetoaddress)
