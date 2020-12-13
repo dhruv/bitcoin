@@ -38,7 +38,7 @@ FUZZ_TARGET_INIT(banman, initialize_banman)
     {
         BanMan ban_man{banlist_file, nullptr, ConsumeBanTimeOffset(fuzzed_data_provider)};
         while (fuzzed_data_provider.ConsumeBool()) {
-            switch (fuzzed_data_provider.ConsumeIntegralInRange<int>(0, 7)) {
+            switch (fuzzed_data_provider.ConsumeIntegralInRange<int>(0, 6)) {
             case 0: {
                 ban_man.Ban(ConsumeSubNet(fuzzed_data_provider),
                     ConsumeBanTimeOffset(fuzzed_data_provider), fuzzed_data_provider.ConsumeBool());
@@ -53,23 +53,19 @@ FUZZ_TARGET_INIT(banman, initialize_banman)
                 break;
             }
             case 3: {
-                ban_man.IsBanned(ConsumeSubNet(fuzzed_data_provider));
-                break;
-            }
-            case 4: {
                 ban_man.Unban(ConsumeSubNet(fuzzed_data_provider));
                 break;
             }
-            case 5: {
+            case 4: {
                 banmap_t banmap;
                 ban_man.GetBanned(banmap);
                 break;
             }
-            case 6: {
+            case 5: {
                 ban_man.DumpBanlist();
                 break;
             }
-            case 7: {
+            case 6: {
                 ban_man.Discourage(ConsumeNetAddr(fuzzed_data_provider));
                 break;
             }
