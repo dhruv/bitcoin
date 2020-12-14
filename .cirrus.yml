@@ -54,6 +54,15 @@ global_task_template: &GLOBAL_TASK_TEMPLATE
 #  install_script:
 #    - choco install python --version=3.7.7 -y
 
+lint_task:
+  name: 'lint'
+  skip: $CIRRUS_REPO_FULL_NAME == "bitcoin-core/gui" && $CIRRUS_PR == ""  # No need to run on the read-only mirror, unless it is a PR.
+  container:
+    image: ubuntu:bionic
+  pip_cache:
+    folder: /tmp/pip_cache_dir
+  script: set -o errexit; source ./ci/lint/lint_run_all.sh
+
 task:
   name: 'ARM [unit tests, no functional tests] [buster]'
   << : *GLOBAL_TASK_TEMPLATE
