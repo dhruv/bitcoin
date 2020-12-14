@@ -5,7 +5,6 @@
 
 #include <banman.h>
 
-#include <netaddress.h>
 #include <node/ui_interface.h>
 #include <util/system.h>
 #include <util/time.h>
@@ -154,12 +153,23 @@ void BanMan::UnbanAll(const CNetAddr& net_addr)
     DumpBanlist(); //store banlist to disk immediately
 }
 
-void BanMan::GetBanned(banmap_t& banmap)
+void BanMan::GetBanned(banmap_t& banmap, std::optional<const CNetAddr> filterForIp)
 {
     LOCK(m_cs_banned);
     // Sweep the banlist so expired bans are not returned
     SweepBanned();
     banmap = m_banned; //create a thread safe copy
+
+    if (filterForIp) {
+        for (auto it = banmap.begin(); it != banmap.end();) {
+            CSubNet sub_net = it->first;
+            if (!sub_net.Match(filterForIp.value())) {
+                it = banmap.erase(it);
+            } else {
+                it++;
+            }
+        }
+    }
 }
 
 void BanMan::SetBanned(const banmap_t& banmap)

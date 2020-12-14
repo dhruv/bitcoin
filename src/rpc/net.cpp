@@ -673,7 +673,9 @@ static RPCHelpMan listbanned()
 {
     return RPCHelpMan{"listbanned",
                 "\nList all manually banned IPs/Subnets.\n",
-                {},
+                {
+                    {"ip", RPCArg::Type::STR, RPCArg::Optional::OMITTED_NAMED_ARG, "If IP is provided, only bans which include the IP will be returned."},
+                },
         RPCResult{RPCResult::Type::ARR, "", "",
             {
                 {RPCResult::Type::OBJ, "", "",
@@ -695,8 +697,16 @@ static RPCHelpMan listbanned()
     }
 
     banmap_t banMap;
-    node.banman->GetBanned(banMap);
-
+    if (request.params[0].isNull()) {
+        node.banman->GetBanned(banMap);
+    } else {
+        CNetAddr netAddr;
+        LookupHost(request.params[0].get_str(), netAddr, false);
+        if (!netAddr.IsValid()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Error: Invalid ip address");
+        }
+        node.banman->GetBanned(banMap, netAddr);
+    }
     UniValue bannedAddresses(UniValue::VARR);
     for (const auto& entry : banMap)
     {
@@ -880,7 +890,7 @@ static const CRPCCommand commands[] =
     { "network",            "getnettotals",           &getnettotals,           {} },
     { "network",            "getnetworkinfo",         &getnetworkinfo,         {} },
     { "network",            "setban",                 &setban,                 {"subnet", "command", "bantime", "absolute"} },
-    { "network",            "listbanned",             &listbanned,             {} },
+    { "network",            "listbanned",             &listbanned,             {"ip"} },
     { "network",            "clearbanned",            &clearbanned,            {} },
     { "network",            "setnetworkactive",       &setnetworkactive,       {"state"} },
     { "network",            "getnodeaddresses",       &getnodeaddresses,       {"count"} },

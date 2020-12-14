@@ -8,12 +8,14 @@
 #include <addrdb.h>
 #include <bloom.h>
 #include <fs.h>
+#include <netaddress.h> // For CNetAddr and CSubNet
 #include <net_types.h> // For banmap_t
 #include <sync.h>
 
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 // NOTE: When adjusting this, update rpcnet:setban's help ("24h")
 static constexpr unsigned int DEFAULT_MISBEHAVING_BANTIME = 60 * 60 * 24; // Default 24-hour ban
@@ -21,8 +23,6 @@ static constexpr unsigned int DEFAULT_MISBEHAVING_BANTIME = 60 * 60 * 24; // Def
 static constexpr std::chrono::minutes DUMP_BANS_INTERVAL{15};
 
 class CClientUIInterface;
-class CNetAddr;
-class CSubNet;
 
 // Banman manages two related but distinct concepts:
 //
@@ -77,7 +77,7 @@ public:
 
     // Removes all ban entries that include net_addr
     void UnbanAll(const CNetAddr& net_addr);
-    void GetBanned(banmap_t& banmap);
+    void GetBanned(banmap_t& banmap, std::optional<const CNetAddr> filterForIp = {});
     void DumpBanlist();
 
 private:
