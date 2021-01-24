@@ -5,7 +5,9 @@
 """Test segwit transactions and blocks on P2P network."""
 from decimal import Decimal
 import math
+import os
 import random
+import shutil
 import struct
 import time
 
@@ -83,6 +85,7 @@ from test_framework.util import (
     softfork_active,
     hex_str_to_bytes,
     assert_raises_rpc_error,
+    get_datadir_path,
 )
 
 # The versionbit bit used to signal activation of SegWit
@@ -1956,21 +1959,49 @@ class SegWitTest(BitcoinTestFramework):
     def test_upgrade_after_activation(self):
         """Test the behavior of starting up a segwit-aware node after the softfork has activated."""
 
-        self.restart_node(2, extra_args=["-segwitheight={}".format(SEGWIT_HEIGHT)])
+        # All nodes are caught up and node 2 is a pre-segwit node that will soon upgrade.
+        assert_equal(self.nodes[0].getblockcount(), self.nodes[2].getblockcount())
+        assert_equal(self.nodes[1].getblockcount(), self.nodes[2].getblockcount())
+        assert SEGWIT_HEIGHT < self.nodes[2].getblockcount()
+        assert softfork_active(self.nodes[0], 'segwit')
+        assert softfork_active(self.nodes[1], 'segwit')
+        assert 'segwit' not in self.nodes[2].getblockchaininfo()['softforks']
+
+        # Restarting node 2 should result in a shutdown because the blockchain consists of
+        # insufficiently validated blocks per segwit consensus rules.
+        self.stop_node(2)
+        with self.nodes[2].assert_debug_log(expected_msgs=["Segwit blocks are insufficiently validated. Please delete blocks dir and chain state dir and restart."], timeout=10):
+            self.nodes[2].start(["-segwitheight={}".format(SEGWIT_HEIGHT)])
+
+        # As directed, the user deletes the blocks and chainstate directories and restarts the node
+        datadir = get_datadir_path(self.options.tmpdir, 2)
+        blocks_dir = os.path.join(datadir, "regtest", "blocks")
+        chainstate_dir = os.path.join(datadir, "regtest", "chainstate")
+        shutil.rmtree(blocks_dir)
+        shutil.rmtree(chainstate_dir)
+
+        self.start_node(2, extra_args=["-segwitheight={}".format(SEGWIT_HEIGHT)])
+        assert_equal(self.nodes[2].getblockcount(), 0)
         self.connect_nodes(0, 2)
 
         # We reconnect more than 100 blocks, give it plenty of time
         self.sync_blocks(timeout=240)
 
-        # Make sure that this peer thinks segwit has activated.
+        # The upgraded node syncs headers and performs IBD
+        assert_equal(self.nodes[0].getblockcount(), self.nodes[2].getblockcount())
+        assert_equal(self.nodes[1].getblockcount(), self.nodes[2].getblockcount())
+        assert softfork_active(self.nodes[0], 'segwit')
+        assert softfork_active(self.nodes[1], 'segwit')
         assert softfork_active(self.nodes[2], 'segwit')
 
-        # Make sure this peer's blocks match those of node0.
+        # Make sure all peers have the same blocks.
         height = self.nodes[2].getblockcount()
         while height >= 0:
             block_hash = self.nodes[2].getblockhash(height)
             assert_equal(block_hash, self.nodes[0].getblockhash(height))
+            assert_equal(block_hash, self.nodes[1].getblockhash(height))
             assert_equal(self.nodes[0].getblock(block_hash), self.nodes[2].getblock(block_hash))
+            assert_equal(self.nodes[1].getblock(block_hash), self.nodes[2].getblock(block_hash))
             height -= 1
 
     @subtest  # type: ignore

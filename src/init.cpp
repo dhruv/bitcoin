@@ -1686,26 +1686,24 @@ bool AppInitMain(const util::Ref& context, NodeContext& node, interfaces::BlockA
                 break;
             }
 
-            bool failed_rewind{false};
-            // Can't hold cs_main while calling RewindBlockIndex, so retrieve the relevant
-            // chainstates beforehand.
-            for (CChainState* chainstate : WITH_LOCK(::cs_main, return chainman.GetAll())) {
-                if (!fReset) {
-                    // Note that RewindBlockIndex MUST run even if we're about to -reindex-chainstate.
-                    // It both disconnects blocks based on the chainstate, and drops block data in
-                    // BlockIndex() based on lack of available witness data.
-                    uiInterface.InitMessage(_("Rewinding blocks...").translated);
-                    if (!chainstate->RewindBlockIndex(chainparams)) {
-                        strLoadError = _(
-                            "Unable to rewind the database to a pre-fork state. "
-                            "You will need to redownload the blockchain");
-                        failed_rewind = true;
-                        break; // out of the per-chainstate loop
+            bool needs_ibd{false};
+            {
+                LOCK(cs_main);
+                for (CChainState* chainstate : chainman.GetAll()) {
+                    if (!fReset) {
+                        uiInterface.InitMessage(_("Checking if IBD is needed...").translated);
+                        if (chainstate->NeedsIBD(chainparams)) {
+                            strLoadError = _(
+                                "Segwit blocks are insufficiently validated. "
+                                "Please delete blocks dir and chain state dir and restart.");
+                            needs_ibd = true;
+                            break; // out of the per-chainstate loop
+                        }
                     }
                 }
             }
 
-            if (failed_rewind) {
+            if (needs_ibd) {
                 break; // out of the chainstate activation do-while
             }
 
